@@ -130,6 +130,8 @@ class FileSaveForm(FileFormBase):
         self._ui.expand_checkbox.toggled.connect(self._on_expand_toggled)
         self._ui.name_edit.textEdited.connect(self._on_name_edited)
         self._ui.name_edit.returnPressed.connect(self._on_name_return_pressed)
+        self._ui.stream_edit.textEdited.connect(self._on_name_edited)
+        self._ui.stream_edit.returnPressed.connect(self._on_name_return_pressed)
         self._ui.version_spinner.valueChanged.connect(self._on_version_value_changed)
         self._ui.file_type_menu.currentIndexChanged.connect(
             self._on_extension_current_index_changed
@@ -227,6 +229,11 @@ class FileSaveForm(FileFormBase):
 
         # get the name, version and extension from the UI:
         name = value_to_str(self._ui.name_edit.text())
+        stream = value_to_str(self._ui.stream_edit.text())
+        name_elements = {
+            "name": name,
+            "stream": stream
+        }
         version = self._ui.version_spinner.value()
         use_next_version = self._ui.use_next_available_cb.isChecked()
         ext_idx = self._ui.file_type_menu.currentIndex()
@@ -244,7 +251,7 @@ class FileSaveForm(FileFormBase):
             priority=35,
             task_kwargs={
                 "env": self._current_env,
-                "name": name,
+                "name_elements": name_elements,
                 "version": version,
                 "use_next_version": use_next_version,
                 "ext": ext,
@@ -328,7 +335,7 @@ class FileSaveForm(FileFormBase):
         self._disable_save_and_warn(msg)
 
     def _generate_path(
-        self, env, name, version, use_next_version, ext, require_path=False
+        self, env, name_elements, version, use_next_version, ext, require_path=False
     ):
         """
         :returns:   Tuple containing (path, min_version)
@@ -349,12 +356,23 @@ class FileSaveForm(FileFormBase):
 
         name_is_used = "name" in env.work_template.keys
         if name_is_used:
+            name = name_elements.get("name", None)
             if not env.work_template.is_optional("name") and not name:
-                raise TankError("Name is required, please enter a valid name!")
+                    raise TankError("Name is required, please enter a valid name!")
             if name:
                 if not env.work_template.keys["name"].validate(name):
                     raise TankError("Name contains illegal characters!")
                 fields["name"] = name
+
+        stream_is_used = "stream" in env.work_template.keys
+        if stream_is_used:
+            stream = name_elements.get("stream", None)
+            if not env.work_template.is_optional("stream") and not stream:
+                    raise TankError("Stream is required, please enter a valid value!")
+            if stream:
+                if not env.work_template.keys["stream"].validate(stream):
+                    raise TankError("Stream contains illegal characters!")
+                fields["stream"] = stream
 
         ext_is_used = "extension" in env.work_template.keys
         if ext_is_used and ext != None:
@@ -514,10 +532,12 @@ class FileSaveForm(FileFormBase):
             return
 
         name_is_used = "name" in self._current_env.work_template.keys
+        stream_is_used = "stream" in self._current_env.work_template.keys
         ext_is_used = "extension" in self._current_env.work_template.keys
         version_is_used = "version" in self._current_env.work_template.keys
 
-        if not name_is_used and not ext_is_used and not version_is_used:
+        if not name_is_used and not ext_is_used and \
+            not version_is_used and not stream_is_used:
             return
 
         # get the fields for this file:
@@ -544,9 +564,23 @@ class FileSaveForm(FileFormBase):
                 # need to use either the current name if we have it or the default if we don't!
                 current_name = value_to_str(self._ui.name_edit.text())
                 default_name = self._current_env.save_as_default_name
-                name = current_name or default_name or "scene"
+                name = current_name or default_name or "default"
 
             self._ui.name_edit.setText(name)
+
+        if stream_is_used:
+            # update name edit:
+            stream = fields.get("stream", "")
+            stream_is_optional = (
+                stream_is_used and self._current_env.work_template.is_optional("stream")
+            )
+            if not stream and not stream_is_optional:
+                # need to use either the current name if we have it or the default if we don't!
+                current_stream = value_to_str(self._ui.stream_edit.text())
+                default_stream = self._current_env.save_as_default_stream
+                stream = current_stream or default_stream or "default"
+
+            self._ui.name_edit.setText(stream)
 
         if ext_is_used:
             # update extension menu:
@@ -584,6 +618,8 @@ class FileSaveForm(FileFormBase):
 
             # update visibility and value of the name field:
             name_is_used = "name" in self._current_env.work_template.keys
+            stream_is_used = "stream" in self._current_env.work_template.keys
+
             if name_is_used:
                 # try to set something valid for the name:
                 name = value_to_str(self._ui.name_edit.text())
@@ -592,11 +628,24 @@ class FileSaveForm(FileFormBase):
                 )
                 if not name and not name_is_optional:
                     # lets populate name with a default value:
-                    name = self._current_env.save_as_default_name or "scene"
+                    name = self._current_env.save_as_default_name or "default"
                 self._ui.name_edit.setText(name)
+
+            if stream_is_used:
+                # try to set something valid for the name:
+                stream = value_to_str(self._ui.stream_edit.text())
+                stream_is_optional = (
+                    stream_is_used and self._current_env.work_template.is_optional("stream")
+                )
+                if not stream and not stream_is_optional:
+                    # lets populate name with a default value:
+                    stream = self._current_env.save_as_default_stream or "default"
+                self._ui.stream_edit.setText(stream)
 
             self._ui.name_label.setVisible(name_is_used)
             self._ui.name_edit.setVisible(name_is_used)
+            self._ui.stream_label.setVisible(stream_is_used)
+            self._ui.stream_edit.setVisible(stream_is_used)
 
             # update the visibility and available/default values of the extension menu:
             ext_is_used = "extension" in self._current_env.work_template.keys
@@ -687,7 +736,14 @@ class FileSaveForm(FileFormBase):
                 )
 
             # get the name, version and extension from the UI:
-            name = value_to_str(self._ui.name_edit.text())
+            name_elements = {}
+            name_is_used = "name" in self._current_env.work_template.keys
+            stream_is_used = "stream" in self._current_env.work_template.keys
+            if name_is_used:
+                name_elements["name"] = value_to_str(self._ui.name_edit.text())
+            if stream_is_used:
+                name_elements["stream"] = value_to_str(self._ui.stream_edit.text())
+
             version = self._ui.version_spinner.value()
             use_next_version = self._ui.use_next_available_cb.isChecked()
             ext_idx = self._ui.file_type_menu.currentIndex()
@@ -699,7 +755,7 @@ class FileSaveForm(FileFormBase):
                 # try to generate a path from these details:
                 result = self._generate_path(
                     self._current_env,
-                    name,
+                    name_elements,
                     version,
                     use_next_version,
                     ext,

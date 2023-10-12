@@ -89,6 +89,7 @@ class WorkArea(object):
 
         # context-specific settings:
         self.save_as_default_name = ""
+        self.save_as_default_stream = ""
         self.save_as_prefer_version_up = False
         self.version_compare_ignore_fields = []
         self.valid_file_extensions = []
@@ -122,6 +123,7 @@ class WorkArea(object):
         user_work_area.publish_area_template = self.publish_area_template
         user_work_area.publish_template = self.publish_template
         user_work_area.save_as_default_name = self.save_as_default_name
+        user_work_area.save_as_default_stream = self.save_as_default_stream
         user_work_area.save_as_prefer_version_up = self.save_as_prefer_version_up
         user_work_area.version_compare_ignore_fields = copy.deepcopy(
             self.version_compare_ignore_fields
@@ -279,6 +281,11 @@ class WorkArea(object):
 
         # update other settings:
         self.save_as_default_name = resolved_settings.get("saveas_default_name", "")
+        self.save_as_default_stream = resolved_settings.get(
+            "saveas_default_stream", ""
+        )
+
+        print ("WE GET HERE: ", self.save_as_default_name, self.save_as_default_stream)
         self.save_as_prefer_version_up = resolved_settings.get(
             "saveas_prefer_version_up", False
         )
